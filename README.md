@@ -3,106 +3,66 @@ Yii2 DCACHE ORM
 
 1. 安装
 
-   composer require alan/yii2-orm-dcache:dev-master
+   composer require alan/alan/dcache-helper
 
-2. 配置
+2. 使用
 
-   - 添加dcache访问的http地址，本工具基于dcache的http访问接口编写
+```php
+use alan\dcache_helper\CoroutineHelper;
+use alan\dcache_helper\DCacheHelperFace;
 
-     建议添加到common\config\main-local.php文件添加
+require "../vendor/autoload.php";
 
-     ```php
-     //测试环境配置
-     'dcache_data_center' => [
-             'url' => 'http://10.154.157.157:10003',
-             'key' => 'admvir8359MMjukd~644',
-     ],
-     //正式环境配置
-     'dcache_data_center' => [
-         'url' => 'https://kpc.wetax.com.cn',
-         'key' => 'o4e0-hpoe875wimmv12@7',
-     ],
-     ```
-     
-    - 添加dcache表对应的配置(此配置用于查询表结构，用于ORM操作)
+$cnf = [
+    'dcache_invoice_locator' => 'xxxxxxxxxxxxxxxxxxx',
+    'tars_dacache_proxy' => "DCache.centerProxyServer.ProxyObj",
+    'modules' => [
+        'order'                     => 'center2order',
+        'orderItem'                 => 'center2orderItem',
+        'invoice'                   => 'center2invoice',
+        'invoiceItem'               => 'center2invoiceItem',
+        'merchantInvoice'           => 'center2relMerchantInvoice',
+        'invoiceDeliver'            => 'center2invoiceDeliver',
+        'relBusinessOrderInvoice'   => 'center2relBussinessOrderInvoice',
+        'relBusinessUserInvoice'    => 'center2relBussinessUserInvoice',
+        'taxInvoice'                => 'center2relTaxInvoice',
+        'userInvoice'               => 'center2relUserInvoice',
+    ],
+];
 
-      ```php
-      //测试和正式环境只要表结构一致就只需要添加一处即可
-      'db_tars_order' => [
-          'class' => 'yii\db\Connection',
-          'dsn' => 'mysql:host=10.105.1.106;port=3306;dbname=order_0',
-          'username' => 'gordon',
-          'password' => '4qYAEZ6scVNYPLTWRviT',
-          'charset' => 'utf8',
-          'enableSchemaCache' => true,
-          'schemaCacheDuration' => 86400, // time in seconds
-      ],
-      'db_tars_relationship' => [
-          'class' => 'yii\db\Connection',
-          'dsn' => 'mysql:host=10.105.1.106;port=3306;dbname=relationship_0',
-          'username' => 'gordon',
-          'password' => '4qYAEZ6scVNYPLTWRviT',
-          'charset' => 'utf8',
-          'enableSchemaCache' => true,
-          'schemaCacheDuration' => 86400, // time in seconds
-      ],
-      ```
+$order_sn = '6550307913561455313';
+$type = 1;
 
-      
+if ($type == 0) {
+    $start = microtime(true);
+    $config = new \alan\dcache_helper\Config($cnf['dcache_invoice_locator'], 2, $cnf['modules'], $cnf['tars_dacache_proxy']);
+    $face = DCacheHelperFace::instance($config);
+    $helper = $face->getHelper();
+    $result = $merchantInvoice = $face->withHelper($helper)->order()->get($order_sn);
+    $merchantInvoice = $face->withHelper($helper)->orderItem()->get($order_sn);
+    print_r($result);
+    print_r($merchantInvoice);
+    $cost = microtime(true) - $start;
+    echo "all cost {$cost} \n";
+} else {
+    go(function () use ($cnf, $order_sn){
+        $config = new \alan\dcache_helper\Config($cnf['dcache_invoice_locator'], 3, $cnf['modules'], $cnf['tars_dacache_proxy']);
+        $face = DCacheHelperFace::instance($config);
+        $helper = $face->getHelper();
+        $start = microtime(true);
+        $coroutine = new CoroutineHelper();
+        $coroutine->add(function() use ($face, $helper, $order_sn){
+            $merchantInvoice = $face->withHelper($helper)->order()->get($order_sn);
+            return [1, $merchantInvoice];
+        });
 
-3. 使用示例
+        $coroutine->add(function() use ($face, $helper, $order_sn){
+            $merchantInvoice = $face->withHelper($helper)->orderItem()->get($order_sn);
+            return [2, $merchantInvoice];
+        });
+        $result = $coroutine->run();
+        print_r($result);
+    });
+}
+```
 
-   -  查询
-
-     ```php
-     /** 查询一条 **/
-     Invoice::find()->where(['order_sn' =>'xxxxx'])->asArray(false)->one()
-     /** 查询多条 **/
-     Invoice::find()->where(['order_sn' =>'xxxxx'])->asArray(false)->all()
-     /** 取出数组 **/   
-     Invoice::find()->where(['order_sn' =>'xxxxx'])->asArray(false)->asArray()->all()   
-     ```
-
-     
-
-   - 更新
-
-     ```php
-     public function actionUpdate($orderSn){
-         /** @var Order $order */
-         $order = Order::find()->where(['order_sn' => $orderSn])->asArray(false)->one();
-         if (empty($order)){
-             die("查询失败");
-         }
-         print_r($order->toArray());
-         $order->b_user_id = "1234";
-         $saveRsp = $order->save();
-         if (!$saveRsp){
-             print_r($order->getErrors());
-         } else {
-             $order = Order::find()->where(['order_sn' => $orderSn])->asArray(true)->one();
-             print_r($order);
-         }
-     }
-     ```
-
-     
-
-   - 删除
-
-     ```PHP
-     public function actionDelete($orderSn){
-         /** @var Order $order */
-         $order = Order::find()->where(['order_sn' => $orderSn])->asArray(false)->one();
-         if (empty($order)){
-             die("查询失败");
-         }
-         $order->delete();
-         $order = Order::find()->where(['order_sn' => $orderSn])->asArray(true)->one();
-         print_r($order);
-     }
-     ```
-
-4. 已知问题
-   - dcache不支持limit语句，查询all时要注意取出数据的数量
-   - orm不支里面使用带查询的验证器，比如union验证器。建议放在外层自验证验证唯一性

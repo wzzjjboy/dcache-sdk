@@ -9,7 +9,6 @@
         }
     ],
     "require": {
-        "copyrenzhe/tars-ide-helper": "dev-master",
         "phptars/tars-client": "^0.2.2",
         "ext-phptars": "*"
     },
